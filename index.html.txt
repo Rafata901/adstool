@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>أداة فحص جاهزية الموقع لأدسنس</title>
+<style>
+body{font-family:'Tahoma',Arial;direction:rtl;text-align:right;background:#f1f1f1;margin:0;padding:0;}
+.container{max-width:800px;margin:40px auto;padding:20px;background:#fff;border-radius:10px;box-shadow:0 0 10px rgba(0,0,0,0.1);}
+h2{text-align:center;color:#0b66b2;}
+input[type=text]{width:100%;padding:10px;margin:10px 0;border-radius:8px;border:1px solid #ccc;}
+button{width:100%;padding:12px;background:#0b66b2;color:#fff;font-size:16px;border:none;border-radius:8px;cursor:pointer;}
+#result{margin-top:20px;padding:15px;background:#f9f9f9;border:1px solid #ccc;border-radius:8px;min-height:120px;}
+ul{padding-left:20px;}
+</style>
+</head>
+<body>
+<div class="container">
+<h2>📝 أداة فحص جاهزية الموقع لمطابقة شروط جوجل أدسنس</h2>
+<input id="siteUrl" type="text" placeholder="أدخل رابط موقعك مثل https://example.com">
+<button onclick="scanSite()">🔍 فحص الموقع</button>
+<div id="result">👉 أدخل رابط الموقع واضغط على زر الفحص</div>
+</div>
+
+<script>
+function scanSite(){
+  let url=document.getElementById("siteUrl").value.trim();
+  if(url===""){document.getElementById("result").innerHTML="⚠️ الرجاء إدخال رابط الموقع.";return;}
+  if(!/^https?:\/\//i.test(url)) url="https://"+url;
+
+  document.getElementById("result").innerHTML="⏳ جاري فحص الموقع...";
+
+  // استخدام بروكسي مجاني AllOrigins لتجنب مشاكل CORS
+  let proxyUrl="https://api.allorigins.win/get?url="+encodeURIComponent(url);
+
+  fetch(proxyUrl)
+  .then(res=>res.json())
+  .then(data=>{
+    let html=data.contents;
+    let issues=[];
+
+    // العنوان
+    let titleMatch=html.match(/<title>(.*?)<\/title>/i);
+    let title=titleMatch?titleMatch[1]:"";
+    if(!title) issues.push("❌ لا يوجد عنوان (title) للموقع.");
+    else if(title.length<10||title.length>70) issues.push("⚠️ العنوان موجود لكن طوله غير مناسب (يفضل بين 10 و 70 حرف).");
+    else issues.push("✔️ العنوان مناسب.");
+
+    // الوصف
+    let descMatch=html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
+    let desc=descMatch?descMatch[1]:"";
+    if(!desc) issues.push("❌ لا يوجد وصف (meta description).");
+    else if(desc.length<50||desc.length>320) issues.push("⚠️ الوصف قصير أو طويل جدًا (يفضل بين 50 و 320 حرف).");
+    else issues.push("✔️ الوصف مناسب.");
+
+    // viewport
+    if(/<meta[^>]+name=["']viewport["']/i.test(html)) issues.push("✔️ وسم viewport موجود (الموقع متوافق مع الجوال).");
+    else issues.push("❌ لا يوجد وسم viewport (قد يرفض الموقع في أدسنس لعدم توافقه مع الهواتف).");
+
+    // H1
+    let h1s=html.match(/<h1[^>]*>(.*?)<\/h1>/gi)||[];
+    if(h1s.length===0) issues.push("⚠️ لا يوجد عنوان رئيسي H1.");
+    else issues.push("✔️ يوجد عنوان رئيسي H1.");
+
+    // الصور ووسم alt
+    let imgs=[...html.matchAll(/<img[^>]+>/gi)];
+    let missingAlt=imgs.filter(img=>!/alt=/i.test(img[0]));
+    if(imgs.length===0) issues.push("⚠️ لم يتم العثور على صور في الصفحة.");
+    else if(missingAlt.length>0) issues.push("⚠️ بعض الصور بدون وسم alt (يجب إضافة وصف نصي للصور).");
+    else issues.push("✔️ كل الصور تحتوي على وسم alt.");
+
+    // محتوى محظور
+    let badWords=["porn","sex","gambling","drugs","torrent"];
+    let lowerHtml=html.toLowerCase();
+    let found=badWords.find(w=>lowerHtml.includes(w));
+    if(found) issues.push("❌ المحتوى يحتوي كلمات محظورة في سياسات أدسنس: "+found);
+    else issues.push("✔️ المحتوى لا يحتوي على كلمات محظورة شائعة.");
+
+    // إخراج النتائج
+    let out="<h3>📊 تقرير الفحص:</h3><ul>";
+    issues.forEach(i=>out+="<li>"+i+"</li>");
+    out+="</ul><p style='color:#555;'>ℹ️ هذه الأداة تعطي فحصًا أوليًا فقط، للحصول على تقرير كامل استخدم أدوات مثل <a href='https://pagespeed.web.dev/' target='_blank'>PageSpeed Insights</a> و <a href='https://search.google.com/test/mobile-friendly' target='_blank'>اختبار التوافق مع الجوال</a>.</p>";
+    document.getElementById("result").innerHTML=out;
+  })
+  .catch(err=>{
+    document.getElementById("result").innerHTML="❌ تعذر جلب الموقع: "+err.message;
+  });
+}
+</script>
+</body>
+</html>
